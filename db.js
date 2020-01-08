@@ -12,6 +12,7 @@ let userDb = null;
 let contacts = null;
 let chats = null;
 let conversation = null;
+let ipfs = null;
 
 async function loadDB() {
     const ipfsOptions = {
@@ -28,11 +29,11 @@ async function loadDB() {
     };
     
     // create identity
-    const IdOptions = { id: 'local-id'};
+    const IdOptions = { id: 'chatapp-custom-id'};
     var identity = await Identities.createIdentity(IdOptions);
     
     // Create IPFS instance
-    const ipfs = new IPFS(ipfsOptions);
+    ipfs = new IPFS(ipfsOptions);
     const orbitdb = new OrbitDB(ipfs, identity);
     
     console.log('loading the databases');
@@ -141,6 +142,7 @@ async function loadDB() {
             userDb.load();
             contacts.load();
             chats.load();
+            conversation.load();
         });
     }
     catch (e) {
@@ -280,6 +282,30 @@ async function createConversation(data) {
     }
 }
 
+async function getConversation(data) {
+    try {
+        let conversationData = conversation.query((doc) => doc._id === data.id );        
+        if(conversationData.length > 0) {
+            let participants = conversationData[0].participants.slice();
+            participants.splice(participants.indexOf(data.sender), 1);      
+            let userData = await getUserByPhone(participants[0]);
+            conversationData[0].recieverInfo = userData;
+        }
+        return {
+            "error": false,
+            "data": conversationData,
+            "message": "Success"                
+        };
+    }
+    catch(e) {
+        return {
+            "error": true,
+            "data": null,
+            "message": "failure"
+        };
+    }
+}
+
 async function getRecentConversation(data) {
     try {
         let conversationData = conversation.query((doc) => doc.participants.indexOf(data.sender) !== -1 );
@@ -338,21 +364,42 @@ async function crossCheckContacts(contactList) {
 async function createChat(chatData) {
     try {
         let id = uuid();
-        let payload = {
-            _id: id,
-            conversationId: chatData.conversationId,
-            sender: chatData.sender,
-            reciever: chatData.reciever,
-            body: chatData.message,
-            type: chatData.type,
-            time: Date.now()
-        };
-        console.log(payload)
+        var payload = null;
+        if(chatData.type === 'text') {
+            payload = {
+                _id: id,
+                conversationId: chatData.conversationId,
+                sender: chatData.sender,
+                reciever: chatData.reciever,
+                body: chatData.message,
+                type: chatData.type,
+                time: Date.now()
+            };
+        } else {
+            // add file in the IPFS            
+            let systemPath = __dirname + '/'+ chatData.filePath;
+            let fileObject = fs.readFileSync(systemPath);
+            let fileBuffer = Buffer.from(fileObject);
+            let ipfsLocation = await addIPFSObject(fileBuffer);
+            console.log(ipfsLocation);
+            payload = {
+                _id: id,
+                conversationId: chatData.conversationId,
+                sender: chatData.sender,
+                reciever: chatData.reciever,
+                body: null,
+                type: chatData.type,
+                systemPath: systemPath,
+                ipfsPath: ipfsLocation[0].path,
+                time: Date.now()
+            };
+        }
+        console.log(payload);
         let hash = await chats.put(payload);
         console.log(hash);
         return {
             "error": false,
-            "data": [],
+            "data": chatData.type === 'text' ? [] : payload,
             "message": "Success"                
         };
     }
@@ -503,6 +550,17 @@ async function getCompanyCredit(data) {
     }
 }
 
+async function addIPFSObject(bufferData) {
+    return new Promise((resolve, reject) => {
+        ipfs.files.add(bufferData, (err, file) => {
+            if(err) {
+                console.log(err);
+                reject(err);
+            }
+            resolve(file);
+        });
+    });
+}
 
 async function getUserByPhone(phone) {
     let data = userDb.query((doc) => doc.phone === phone);
@@ -556,5 +614,6 @@ module.exports = {
     getCreditData: getCreditData,
     getCompanyCredit: getCompanyCredit,    
     createProperty: createProperty,
-    buyPropertyForCredit: buyPropertyForCredit
+    buyPropertyForCredit: buyPropertyForCredit,
+    getConversation: getConversation,
 };

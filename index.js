@@ -1,16 +1,24 @@
 const express = require("express");
 const bodyParser = require("body-parser");
 const redis = require("redis");
-const session = require("express-session");
-const redisStore = require("connect-redis")(session);
-const cookieParser = require("cookie-parser");
-const cors = require('cors');
 const jwt = require('jsonwebtoken');
+const multer = require('multer');
 const app = express();
 const client = redis.createClient();
 const router = express.Router();
 const db = require("./db");
-const path = require("path");
+var io = require('socket.io').listen(7777);
+
+var storage =   multer.diskStorage({
+  destination: function (req, file, callback) {
+    callback(null, './uploads');
+  },
+  filename: function (req, file, callback) {
+    callback(null, Date.now() + '-' +  file.originalname );
+  }
+});
+
+var upload = multer({ storage : storage}).single('userPhoto');
 
 app.use(function(req, res, next) {
   res.header("Access-Control-Allow-Origin", "*");
@@ -22,6 +30,12 @@ app.use(function(req, res, next) {
   }
 });
 
+io.sockets.on('connection', function (socket) {
+  socket.on('join', function (data) {
+    socket.join(data.phone); // We are using room of socket io
+  });
+});
+
 app.use(express.static(__dirname + "/views/"));
 app.use(express.static(__dirname + "/views/js"));
 app.use(express.static(__dirname + "/views/css"));
@@ -29,12 +43,18 @@ app.use(express.static(__dirname + "/views/css"));
 var secret = '4hKRFhSFBWHaZT3zwDFE';
 // add the middleware
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({extended: true}));
 
 // routers
+
+app.get('/ping', async (req,res) => {
+  return res.json({ error: false, message: "All good!" });
+});
 
 /**
  * Sign up, add new user
  */
+
 
 app.post("/user", async (req, res) => {
   // add new user
@@ -117,6 +137,19 @@ router.get('/conversation/recent', async (req,res) => {
   });  
 });
 
+router.get('/conversation/:id', async (req,res) => {
+  let senderInfo = req.decoded;
+  let response = await db.getConversation({id: req.params.id, sender: senderInfo.phone});
+  if (response.error) {
+    return res.json({ error: true, message: "error occurred while checking contact" });
+  }  
+  res.json({
+    error: false,
+    message: 'Success',
+    data: response.data
+  });  
+});
+
 router.post('/conversation', async(req,res) => {
     let data = {
       sender: req.decoded.phone,
@@ -134,17 +167,46 @@ router.post('/conversation', async(req,res) => {
     });  
 });
 
-router.post('/chat', async (req,res) => {
+router.post('/chat', async (req,res) => {  
   let data = req.body;
-  let response = await db.createChat(data);
-  if (response.error) {
-    return res.json({ error: true, message: "error occurred while creating chat"});
+  if(data.type === 'text') {    
+    let response = await db.createChat(data);
+    if (response.error) {
+      return res.json({ error: true, message: "error occurred while creating chat"});
+    }
+    // emit socket message
+    data.body = data.message;
+    data.time = Date.now();
+    io.sockets.in(data.reciever).emit('new_msg', {msg: data});
+  
+    // send response
+    res.json({
+      error: false,
+      message: 'Success',
+      data: []
+    });  
+  } else {
+    upload(req, res, async (err) => {
+      if(err) {
+        return res.json({ error: true, message: "error occurred while sending message"});
+      }      
+      let data = req.body;
+      console.log(req.file);
+      console.log(data);
+      data.filePath = req.file.path;
+      let response = await db.createChat(data);
+      if (response.error) {
+        return res.json({ error: true, message: "error occurred while creating chat"});
+      }
+      data.ipfsPath = response.data.ipfsPath;
+      io.sockets.in(data.reciever).emit('new_msg', {msg: data});
+      res.json({
+        error: false,
+        message: 'Success',
+        data: data
+      });
+    }); 
   }
-  res.json({
-    error: false,
-    message: 'Success',
-    data: []
-  });  
 });
 
 router.post('/chat/recent', async(req,res) => {
