@@ -4,7 +4,6 @@ const uuid = require('uuid/v4');
 const bcrypt = require('bcrypt');
 const fs = require('fs');
 const Identities = require('orbit-db-identity-provider');
-const fund = require('./transferfund');
 
 // load all dbs
 let filePath = './dbaddress.js';
@@ -413,143 +412,6 @@ async function createChat(chatData) {
     }
 }
 
-async function createProperty(user, propertyData) {
-    try {
-        let id = uuid();
-        let data = {
-            _id: id,
-            userId: user.userId,
-            email: user.email,
-            propertyData: propertyData
-        };
-        let hash = await propertiesDb.put(data);
-        return {
-            "error": false,
-            "hash": hash            
-        };
-    } catch(e) {
-        return {
-            "error": true,
-            "data": null,
-            "message": "failure"
-        };
-    }
-}
-
-async function buyPropertyForCredit(user, propertyId) {
-    try {
-        let propertyData = await getPropertyById(propertyId);
-        // if(propertyData[0].propertyData.leasedTo !== null) {
-        //     return {
-        //         "error": true,
-        //         "data": null,
-        //         "message": "Property already rented/leased"
-        //     };
-        // }
-        let senderInfo = await getUserByEmail(user.email);
-        let recieverData = await getUserByEmail(propertyData[0].email);
-        let amount = propertyData[0].propertyData.price;
-        console.log(amount);
-        let txData = await fund.transferFund({
-            address: senderInfo[0].accountAddress,
-            privateKey: senderInfo[0].privateKey
-        },
-        {
-            address: recieverData[0].accountAddress
-        }, amount);
-        console.log(txData);
-        let id = uuid();
-        let data = {
-            _id: id,
-            lenderEmail: user.email,
-            credit: propertyData[0].propertyData.credit,
-            txId: txData.id,
-            proof: txData.link,
-            propertyId: propertyId,
-            propertyData: propertyData
-        };
-        let hash = await realtimeListDb.put(data);
-        console.log(hash);
-        // add credit to the company account
-        let senderData = senderInfo[0];
-        console.log(senderData);
-        let recieverDataRevised = recieverData[0];
-        // increase balance
-        let senderBalance = senderInfo.balance;
-        let senderCredit = senderInfo.carbonCredit;
-        if(isNaN(senderBalance)) {
-            senderBalance = 0;
-        }
-        if(isNaN(senderCredit)) {
-            senderCredit = 0;
-        }
-        senderBalance -= parseFloat(propertyData[0].propertyData.price);
-        senderCredit += parseFloat(propertyData[0].propertyData.credit);
-        senderData.balance = senderBalance;
-        senderData.carbonCredit = senderCredit;
-        let hash2 = await userDb.put(senderData);
-        console.log(hash2);
-        // add balance to the farmer
-        recieverDataRevised.balance = parseFloat(recieverDataRevised.balance + propertyData[0].propertyData.price);
-        let hash3 = await userDb.put(recieverDataRevised);
-        console.log(hash3);
-        // update property data
-        propertyData[0].propertyData.leasedTo = senderInfo[0].email;
-        let hash4 = await propertiesDb.put(propertyData[0]);
-        console.log(hash);
-        return {
-            "error": false,
-            "data": data,
-            "message": "Success"
-        };
-    } catch(e) {
-        console.log(e);
-       return {
-            "error": true,
-            "data": null,
-            "message": "failure"
-        };
-    }
-}
-
-
-
-async function getCreditData() {
-    try {
-        let listingData = realtimeListDb.query((doc) => doc);
-        return {
-            "error": false,
-            "data": listingData,
-            "message": "Success"
-        };
-    }
-    catch (e) {
-        return {
-            "error": true,
-            "data": null,
-            "message": "failure"
-        };
-    }
-}
-
-async function getCompanyCredit(data) {
-    try {
-        let listingData = realtimeListDb.query((doc) => doc.email === data.email);
-        return {
-            "error": false,
-            "data": listingData,
-            "message": "Success"
-        };
-    }
-    catch (e) {
-        return {
-            "error": true,
-            "data": null,
-            "message": "failure"
-        };
-    }
-}
-
 async function addIPFSObject(bufferData) {
     return new Promise((resolve, reject) => {
         ipfs.files.add(bufferData, (err, file) => {
@@ -611,9 +473,5 @@ module.exports = {
     getRecentConversation: getRecentConversation,
     crossCheckContacts: crossCheckContacts,
     createChat: createChat,
-    getCreditData: getCreditData,
-    getCompanyCredit: getCompanyCredit,    
-    createProperty: createProperty,
-    buyPropertyForCredit: buyPropertyForCredit,
     getConversation: getConversation,
 };
