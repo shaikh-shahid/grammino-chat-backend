@@ -340,7 +340,7 @@ async function crossCheckContacts(contactList) {
                 userContacts.push({
                     name: contactData[0].name,
                     phone: contactData[0].phone,
-                    profile: null,
+                    profile: contactData[0],
                     isContact: true
                 });
             }
