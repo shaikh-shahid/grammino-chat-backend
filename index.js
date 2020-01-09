@@ -17,6 +17,8 @@ var storage =   multer.diskStorage({
 });
 
 var upload = multer({ storage : storage}).single('userPhoto');
+var userProfileUpload = multer({ storage : storage}).single('userProfilePhoto');
+
 
 app.use(function(req, res, next) {
   res.header("Access-Control-Allow-Origin", "*");
@@ -94,7 +96,7 @@ app.post("/login", async (req, res) => {
     let resp = {
       userId: response.data.userId,
       phone: response.data.phone,
-      name: response.data.name
+      name: response.data.name      
     };
     var token = jwt.sign(resp,secret, {
       expiresIn: '365d' // never expires token
@@ -220,6 +222,43 @@ router.post('/chat/recent', async(req,res) => {
     error: false,
     message: 'Success',
     data: response.data
+  }); 
+});
+
+router.post('/user/profile', async(req,res) => {
+  userProfileUpload(req,res, async (err) => {
+    if(err) {
+      return res.json({ error: true, message: "error uploading profile photo"});
+    }
+    let payload = {};
+    payload.phone = req.body.phone;
+    if(req.file) {
+      payload.path = req.file.path;
+    }
+    payload.name = req.body.name;
+    payload.status = req.body.status;
+    let response = await db.updateUserInfo(payload);
+    if (response.error) {
+      return res.json({ error: true, message: "error occurred while updating user profile information"});
+    }
+    res.json({
+      error: false,
+      message: 'Success',
+      data: []
+    }); 
+  });
+});
+
+router.get('/user/profile', async(req,res) => {
+  let userPhone = req.decoded.phone;
+  let response = await db.getUserInfo(userPhone);
+  if (response.error) {
+    return res.json({ error: true, message: "error occurred while updating user profile information"});
+  }
+  res.json({
+    error: false,
+    message: 'Success',
+    data: response
   }); 
 });
 

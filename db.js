@@ -403,7 +403,38 @@ async function createChat(chatData) {
         };
     }
     catch(e) {
-        console.log(e)
+        console.log(e);
+        return {
+            "error": true,
+            "data": null,
+            "message": "failure"
+        };
+    }
+}
+
+async function updateUserInfo(payload) {
+    try {
+        let userData = await getUserByPhone(payload.phone);
+        if(payload.path) {
+            // profile photo coming
+            let systemPath = __dirname + '/'+ payload.path;
+            let fileObject = fs.readFileSync(systemPath);
+            let fileBuffer = Buffer.from(fileObject);
+            let ipfsLocation = await addIPFSObject(fileBuffer);
+            userData[0].profilePhoto = ipfsLocation[0].path;
+        }
+        userData[0].name = payload.name;
+        userData[0].status = payload.status;
+        let hash = userDb.put(userData[0]);
+        console.log(hash);
+        return {
+            "error": false,
+            "data": [],
+            "message": "Success"                
+        };
+    } 
+    catch(e) {
+        console.log(e);
         return {
             "error": true,
             "data": null,
@@ -424,13 +455,13 @@ async function addIPFSObject(bufferData) {
     });
 }
 
-async function getUserByPhone(phone) {
-    let data = userDb.query((doc) => doc.phone === phone);
+async function getUserInfo(phone) {
+    let data = await getUserByPhone(phone);    
     return data;
 }
 
-async function getPropertyById(id) {
-    let data = propertiesDb.query((doc) => doc.propertyData.id === id);
+async function getUserByPhone(phone) {
+    let data = userDb.query((doc) => doc.phone === phone);
     return data;
 }
 
@@ -474,4 +505,6 @@ module.exports = {
     crossCheckContacts: crossCheckContacts,
     createChat: createChat,
     getConversation: getConversation,
+    updateUserInfo: updateUserInfo,
+    getUserInfo: getUserInfo,
 };
