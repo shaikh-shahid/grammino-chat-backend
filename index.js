@@ -5,7 +5,7 @@ const multer = require('multer');
 const app = express();
 const router = express.Router();
 const db = require("./db");
-var io = require('socket.io').listen(7777);
+global.io = require('socket.io').listen(7777);
 
 var storage =   multer.diskStorage({
   destination: function (req, file, callback) {
@@ -32,7 +32,7 @@ app.use(function(req, res, next) {
 
 io.sockets.on('connection', function (socket) {
   socket.on('join', function (data) {
-    socket.join(data.phone); // We are using room of socket io
+    socket.join(data.phone); // We are using room of socket io    
   });
 });
 
@@ -48,6 +48,7 @@ app.use(bodyParser.urlencoded({extended: true}));
 // routers
 
 app.get('/ping', async (req,res) => {
+  console.log(Object.keys(io.sockets.adapter.rooms));
   return res.json({ error: false, message: "All good!" });
 });
 
@@ -177,8 +178,7 @@ router.post('/chat', async (req,res) => {
     // emit socket message
     data.body = data.message;
     data.time = Date.now();
-    io.sockets.in(data.reciever).emit('new_msg', {msg: data});
-  
+    global.io.sockets.in(data.reciever).emit('new_msg', {msg: data});  
     // send response
     res.json({
       error: false,
@@ -199,7 +199,7 @@ router.post('/chat', async (req,res) => {
         return res.json({ error: true, message: "error occurred while creating chat"});
       }
       data.ipfsPath = response.data.ipfsPath;
-      io.sockets.in(data.reciever).emit('new_msg', {msg: data});
+      global.io.sockets.in(data.reciever).emit('new_msg', {msg: data});
       res.json({
         error: false,
         message: 'Success',

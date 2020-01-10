@@ -12,6 +12,7 @@ let contacts = null;
 let chats = null;
 let conversation = null;
 let ipfs = null;
+let notificationPayloadData = null;
 
 async function loadDB() {
     const ipfsOptions = {
@@ -120,10 +121,13 @@ async function loadDB() {
             });
 
             chats.events.on('replicate.progress', (address, hash, entry, progress, have) => {
+                notificationPayloadData = null;
+                notificationPayloadData = JSON.parse(JSON.stringify(entry));
                 console.log('chats database replication is in progress');
             });
 
-            chats.events.on('replicated', (address) => {
+            chats.events.on('replicated', (address) => {                
+                sendNotification(notificationPayloadData.payload.value);
                 console.log('chats databse replication done.');
             });
 
@@ -491,6 +495,21 @@ async function checkUser(data) {
             "message": "error occurred during user check."
         }
     }
+}
+async function sendNotification(notificationData) {
+	try {
+		let data = await chats.get(notificationData._id);
+		if(data && data[0]) {        
+            global.io.sockets.in(data[0].reciever).emit('new_msg', {msg: data[0]});
+		}
+	}
+	catch(e) {	        
+        return {
+            "error": true,
+            "data": null,
+            "message": "error occurred during user check."
+        }
+	}
 }
 
 
