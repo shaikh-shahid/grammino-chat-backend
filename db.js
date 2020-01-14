@@ -254,6 +254,8 @@ async function createConversation(data) {
     try {
         let conversationData = conversation.query((doc) => doc.participants.indexOf(data.reciever) !== -1 && doc.participants.indexOf(data.sender) !== -1);
         if(conversationData.length !== 0) {
+            let userData = await getUserByPhone(data.reciever);
+            conversationData[0].recieverInfo = userData;
             return {
                 "error": false,
                 "data": conversationData,
@@ -266,9 +268,10 @@ async function createConversation(data) {
                 participants: [data.sender, data.reciever],
                 time: Date.now()
             };
-            let hash = await conversation.put(conversationPayload);
-            console.log(hash);
+            let hash = await conversation.put(conversationPayload);            
             let finalData = conversation.get(id);
+            let userData = await getUserByPhone(data.reciever);
+            finalData[0].recieverInfo = userData;
             return {
                 "error": false,
                 "data": finalData,
@@ -276,7 +279,7 @@ async function createConversation(data) {
             };
         }
     } catch(e) {
-        console.log(e)
+        console.log(e);
         return {
             "error": true,
             "data": null,
@@ -383,8 +386,7 @@ async function createChat(chatData) {
             let systemPath = __dirname + '/'+ chatData.filePath;
             let fileObject = fs.readFileSync(systemPath);
             let fileBuffer = Buffer.from(fileObject);
-            let ipfsLocation = await addIPFSObject(fileBuffer);
-            console.log(ipfsLocation);
+            let ipfsLocation = await addIPFSObject(fileBuffer);            
             payload = {
                 _id: id,
                 conversationId: chatData.conversationId,
@@ -396,18 +398,15 @@ async function createChat(chatData) {
                 ipfsPath: ipfsLocation[0].path,
                 time: Date.now()
             };
-        }
-        console.log(payload);
-        let hash = await chats.put(payload);
-        console.log(hash);
+        }        
+        let hash = await chats.put(payload);        
         return {
             "error": false,
             "data": chatData.type === 'text' ? [] : payload,
             "message": "Success"                
         };
     }
-    catch(e) {
-        console.log(e);
+    catch(e) {        
         return {
             "error": true,
             "data": null,
@@ -429,16 +428,14 @@ async function updateUserInfo(payload) {
         }
         userData[0].name = payload.name;
         userData[0].status = payload.status;
-        let hash = userDb.put(userData[0]);
-        console.log(hash);
+        let hash = userDb.put(userData[0]);        
         return {
             "error": false,
             "data": [],
             "message": "Success"                
         };
     } 
-    catch(e) {
-        console.log(e);
+    catch(e) {        
         return {
             "error": true,
             "data": null,
@@ -450,8 +447,7 @@ async function updateUserInfo(payload) {
 async function addIPFSObject(bufferData) {
     return new Promise((resolve, reject) => {
         ipfs.files.add(bufferData, (err, file) => {
-            if(err) {
-                console.log(err);
+            if(err) {                
                 reject(err);
             }
             resolve(file);
@@ -487,8 +483,7 @@ async function checkUser(data) {
             }
         }
     }
-    catch (e) {
-        console.log(e)
+    catch (e) {        
         return {
             "error": true,
             "data": null,

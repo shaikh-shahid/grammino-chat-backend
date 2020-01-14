@@ -19,7 +19,6 @@ var storage =   multer.diskStorage({
 var upload = multer({ storage : storage}).single('userPhoto');
 var userProfileUpload = multer({ storage : storage}).single('userProfilePhoto');
 
-
 app.use(function(req, res, next) {
   res.header("Access-Control-Allow-Origin", "*");
   res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, x-access-token");
@@ -36,10 +35,6 @@ io.sockets.on('connection', function (socket) {
   });
 });
 
-app.use(express.static(__dirname + "/views/"));
-app.use(express.static(__dirname + "/views/js"));
-app.use(express.static(__dirname + "/views/css"));
-
 var secret = '4hKRFhSFBWHaZT3zwDFE';
 // add the middleware
 app.use(bodyParser.json());
@@ -47,8 +42,7 @@ app.use(bodyParser.urlencoded({extended: true}));
 
 // routers
 
-app.get('/ping', async (req,res) => {
-  console.log(Object.keys(io.sockets.adapter.rooms));
+app.get('/ping', async (req,res) => {  
   return res.json({ error: false, message: "All good!" });
 });
 
@@ -156,7 +150,6 @@ router.post('/conversation', async(req,res) => {
       sender: req.decoded.phone,
       reciever: req.body.reciever
     };
-    console.log(data)
     let response = await db.createConversation(data);
     if (response.error) {
       return res.json({ error: true, message: "error occurred while creating conversation" });
@@ -190,9 +183,7 @@ router.post('/chat', async (req,res) => {
       if(err) {
         return res.json({ error: true, message: "error occurred while sending message"});
       }      
-      let data = req.body;
-      console.log(req.file);
-      console.log(data);
+      let data = req.body;      
       data.filePath = req.file.path;
       let response = await db.createChat(data);
       if (response.error) {
@@ -272,6 +263,11 @@ app.get("/logout", (req, res) => {
 
 app.use(require('./tokenValidator')); //middleware to authenticate token
 app.use("/api", router);
+
+// global error handler
+app.use(function(err,req,res,next) {
+  console.log("Error happens",err.stack);
+});
 
 app.listen(process.env.PORT || 3000);
 console.log("Listening on " + (process.env.PORT || 3000) + " port");

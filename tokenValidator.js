@@ -3,7 +3,6 @@ var jwt = require('jsonwebtoken');
 module.exports = function(req,res,next) {
   var token = req.body.token || req.query.token || req.headers['x-access-token'];
   // decode token
-  console.log(token)
   if (token) {
     // verifies secret and checks exp
     jwt.verify(token, '4hKRFhSFBWHaZT3zwDFE', function(err, decoded) {
@@ -11,7 +10,6 @@ module.exports = function(req,res,next) {
             return res.json({"error": true, "message": 'Failed to authenticate token.' });
         }
       req.decoded = decoded;
-      console.log('req decoded', req.decoded)
       next();
     });
   } else {
