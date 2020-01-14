@@ -168,9 +168,7 @@ async function addUser(requestData) {
             time: Date.now()
         };        
         let hash = await userDb.put(data);
-        console.log(hash);
         let userData = userDb.get(id);
-        console.log(userData);
         return {
             "error": false,
             "hash": hash,
@@ -210,7 +208,6 @@ async function login(data) {
         }
     }
     catch (e) {
-        console.log(e);
         return {
             "error": true,
             "data": null,
@@ -222,9 +219,7 @@ async function login(data) {
 async function getRecentChat(data) {
     try {
         // check if conversation exists
-        console.log(data.conversationId)
         let conversationData = conversation.query((doc) => doc._id === data.conversationId);
-        console.log(conversationData);
         if(conversationData.length !== 0) {
             let chatData = chats.query((doc) => doc.conversationId === conversationData[0]._id);
             return {
@@ -241,7 +236,6 @@ async function getRecentChat(data) {
         }
     }
     catch (e) {
-        console.log(e)
         return {
             "error": true,
             "data": null,
@@ -279,7 +273,6 @@ async function createConversation(data) {
             };
         }
     } catch(e) {
-        console.log(e);
         return {
             "error": true,
             "data": null,
