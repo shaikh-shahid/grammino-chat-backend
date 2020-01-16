@@ -128,6 +128,7 @@ async function loadDB() {
 
             chats.events.on('replicated', (address) => {                
                 sendNotification(notificationPayloadData.payload.value);
+                notificationPayloadData = null;
                 console.log('chats databse replication done.');
             });
 
@@ -395,7 +396,7 @@ async function createChat(chatData) {
         let hash = await chats.put(payload);        
         return {
             "error": false,
-            "data": chatData.type === 'text' ? [] : payload,
+            "data": payload,
             "message": "Success"                
         };
     }

@@ -171,6 +171,7 @@ router.post('/chat', async (req,res) => {
     // emit socket message
     data.body = data.message;
     data.time = Date.now();
+    data._id = response.data._id;
     global.io.sockets.in(data.reciever).emit('new_msg', {msg: data});  
     // send response
     res.json({
