@@ -3,6 +3,7 @@ const OrbitDB = require('orbit-db');
 const uuid = require('uuid/v4');
 const bcrypt = require('bcrypt');
 const fs = require('fs');
+const { exec } = require('child_process');
 const Identities = require('orbit-db-identity-provider');
 
 // load all dbs
@@ -11,8 +12,11 @@ let userDb = null;
 let contacts = null;
 let chats = null;
 let conversation = null;
+let entity = null;
+let entityComm = null;
 let ipfs = null;
 let notificationPayloadData = null;
+let entityPayloadData = null;
 
 async function loadDB() {
     const ipfsOptions = {
@@ -70,12 +74,28 @@ async function loadDB() {
                         write: ['*']
                     }   
                 });
+
+                entity = await orbitdb.create('dc.entity', 'docstore', {
+                    accessController: {
+                        write: ['*']
+                    }   
+                });
+
+                entityComm = await orbitdb.create('dc.entityComm', 'docstore', {
+                    accessController: {
+                        write: ['*']
+                    }   
+                });
+
                 let fileContents = {
                     "user": userDb.address.toString(),
                     "contacts": contacts.address.toString(),
                     "chats": chats.address.toString(),
-                    "conversation": conversation.address.toString()
-                }
+                    "conversation": conversation.address.toString(),
+                    "entity": entity.address.toString(),
+                    "entityComm": entityComm.address.toString(),
+                };
+
                 // write the db file
                 fs.writeFileSync(filePath, JSON.stringify(fileContents));
                 console.log('database peer file created, loading them in memory');
@@ -88,7 +108,8 @@ async function loadDB() {
                 contacts = await orbitdb.open(config.contacts);
                 chats = await orbitdb.open(config.chats);
                 conversation = await orbitdb.open(config.conversation);
-
+                entity = await orbitdb.open(config.entity);
+                entityComm = await orbitdb.open(config.entityComm);
             }
 
             // load the local store of the data
@@ -143,10 +164,58 @@ async function loadDB() {
             conversation.events.on('replicated', (address) => {
                 console.log('conversation databse replication done.');
             });
+
+            entity.events.on('ready', () => {
+                console.log('Entity database is ready.');
+            });
+
+            entity.events.on('replicate.progress', (address, hash, entry, progress, have) => {
+                console.log('Entity database replication is in progress');
+            });
+
+            entity.events.on('replicated', (address) => {
+                console.log('Entity databse replication done.');
+            });
+
+            entityComm.events.on('ready', () => {
+                console.log('Entity communication database is ready.');
+            });
+
+            entityComm.events.on('replicate.progress', (address, hash, entry, progress, have) => {
+                console.log('Entity communication database replication is in progress');
+                entityPayloadData = null;
+                entityPayloadData = JSON.parse(JSON.stringify(entry));
+                console.log('chats database replication is in progress');
+            });
+
+            entityComm.events.on('replicated', (address) => {            
+                if(entityPayloadData.payload.value.type === 'photo') {
+                    // this is a reply
+                    // emit the message
+                    let entityCommData = entityComm.get(entityPayloadData.payload.value._id);
+                    global.io.sockets.in(entityPayloadData.payload.value.phone).emit('new_entity_msg', {msg: entityCommData[0]});  
+                    console.log('another event emiitedd');
+                } else {
+                    // this is a request to act on
+                    // check if we have a entity with this node
+                    global.entityNode.map((singleEntity) => {
+                        if(singleEntity.entityId === entityPayloadData.payload.value.entityId) {
+                            // command is for this Node
+                            // do the needful
+                            performEntityAction(entityPayloadData.payload.value);
+                            entityPayloadData = null;
+                        }
+                    });
+                }                   
+                console.log('Entity communication databse replication done.');
+            });
+
             userDb.load();
             contacts.load();
             chats.load();
             conversation.load();
+            entity.load();
+            entityComm.load();
         });
     }
     catch (e) {
@@ -235,6 +304,24 @@ async function getRecentChat(data) {
                 "message": "Success"
             };
         }
+    }
+    catch (e) {
+        return {
+            "error": true,
+            "data": null,
+            "message": "failure"
+        };
+    }
+}
+
+async function getNetworkMessage() {
+    try {
+        let chatData = chats.query((doc) => doc.conversationId === '123456789');        
+        return {
+            "error": false,
+            "data": chatData,
+            "message": "Success"
+        };
     }
     catch (e) {
         return {
@@ -373,6 +460,7 @@ async function createChat(chatData) {
                 reciever: chatData.reciever,
                 body: chatData.message,
                 type: chatData.type,
+                isBot: chatData.isBot? true: false,
                 time: Date.now()
             };
         } else {
@@ -390,6 +478,7 @@ async function createChat(chatData) {
                 type: chatData.type,
                 systemPath: systemPath,
                 ipfsPath: ipfsLocation[0].path,
+                isBot: chatData.isBot? true: false,
                 time: Date.now()
             };
         }        
@@ -401,6 +490,128 @@ async function createChat(chatData) {
         };
     }
     catch(e) {        
+        return {
+            "error": true,
+            "data": null,
+            "message": "failure"
+        };
+    }
+}
+
+async function createEntity(requestData) {
+    try {
+        let id = uuid();
+        let data = {
+            _id: id,
+            name: requestData.name,            
+            time: Date.now()
+        };        
+        let hash = await entity.put(data);
+        let entityData = entity.get(id);
+        return {
+            "error": false,
+            "hash": hash,
+            "data": entityData[0]
+        };
+    }
+    catch (e) {
+        console.log(e);
+        return {
+            "error": true,
+            "hash": null,
+            "data": null
+        }
+    }
+}
+
+async function listEntity() {
+    try {
+        let entityData = entity.query((doc) => doc);
+        return {
+            "error": false,
+            "data": entityData,
+            "message": "Success"
+        };
+    }
+    catch (e) {
+        return {
+            "error": true,
+            "data": null,
+            "message": "failure"
+        };
+    }
+}
+
+async function createEntityCommunication(requestData) {
+    try {
+        let id = uuid();
+        var payload = null;
+        if(requestData.type === 'text') {
+            payload = {
+                _id: id,
+                entityId: requestData.entityId,
+                phone: requestData.phone,
+                name: requestData.userName,
+                type: requestData.type,
+                message: requestData.message,
+                time: Date.now()
+            };  
+        } else {
+            let systemPath = requestData.filePath;
+            let fileObject = fs.readFileSync(systemPath);
+            let fileBuffer = Buffer.from(fileObject);
+            let ipfsLocation = await addIPFSObject(fileBuffer);   
+            payload = {
+                _id: id,
+                entityId: requestData.entityId,
+                phone: requestData.phone,
+                name: requestData.userName,
+                type: requestData.type,
+                message: null,
+                systemPath: systemPath,
+                ipfsPath: ipfsLocation[0].path,
+                time: Date.now()
+            };  
+        }
+        let hash = await entityComm.put(payload);
+        let entityCommData = entityComm.get(id);
+
+        // check if the command is for this node itself
+        if(requestData.type === 'text') {
+            global.entityNode.map((singleEntity) => {
+                if(singleEntity.entityId === requestData.entityId) {
+                    // command is for this Node
+                    // do the needful
+                    performEntityAction(entityCommData[0]);
+                }
+            });          
+        }
+        return {
+            "error": false,
+            "hash": hash,
+            "data": entityCommData[0]
+        };
+    }
+    catch (e) {
+        console.log(e);
+        return {
+            "error": true,
+            "hash": null,
+            "data": null
+        }
+    }
+}
+
+async function listEntityCommunication(data) {
+    try {
+        let entityCommData = entityComm.query((doc) => doc.phone === data.phone);
+        return {
+            "error": false,
+            "data": entityCommData,
+            "message": "Success"
+        };
+    }
+    catch (e) {
         return {
             "error": true,
             "data": null,
@@ -487,20 +698,73 @@ async function checkUser(data) {
 }
 async function sendNotification(notificationData) {
 	try {
-		let data = await chats.get(notificationData._id);
-		if(data && data[0]) {        
+
+        let data = await chats.get(notificationData._id);
+        if(notificationData.conversationId === '123456789') {
+            // its from network
+            console.log('emit network message');
+            global.io.emit('new_network_msg', {msg: data[0]});
+        } else {
             global.io.sockets.in(data[0].reciever).emit('new_msg', {msg: data[0]});
-		}
+        }
 	}
 	catch(e) {	        
         return {
             "error": true,
             "data": null,
             "message": "error occurred during user check."
-        }
+        };
 	}
 }
 
+async function performEntityAction(entityActionData) {
+    try {
+        // execute python script to take photo
+        // add photo in the IPFS
+        // create new entity communication
+        // emit the socket event to the reciever
+        let filePath = `/home/shahidshaikh/projects/decentralized-chat/uploads/${uuid()}.jpg`;        
+        exec(`fswebcam -r 320x240 -S 3 --jpeg 50 --save ${filePath}`, async (err, stdout, stderr) => {
+            if (err) {
+              console.error(`exec error: ${err}`);
+              throw(err);
+            }
+            console.log('photo taken');
+            // adding into IPFS
+            let systemPath = filePath;
+            let fileObject = fs.readFileSync(systemPath);
+            let fileBuffer = Buffer.from(fileObject);
+            let ipfsLocation = await addIPFSObject(fileBuffer);
+            console.log(ipfsLocation);
+            let id = uuid();
+            let payload = {
+                _id: id,
+                entityId: entityActionData.entityId,
+                phone: entityActionData.phone,
+                name: entityActionData.name,
+                type: 'photo',
+                message: null,
+                systemPath: systemPath,
+                ipfsPath: ipfsLocation[0].path,
+                time: Date.now()
+            };
+            let hash = await entityComm.put(payload);
+            let entityCommData = entityComm.get(id);
+
+            console.log(entityCommData)
+            // if user connected to the same node, emit the reply
+            global.io.sockets.in(entityActionData.phone).emit('new_entity_msg', {msg: entityCommData[0]});  
+            console.log('event emitted');
+          });
+    }
+    catch(e) {
+        return {
+            "error": true,
+            "data": null,
+            "message": "error occurred during entity action."
+        };
+    }
+}
 
 
 module.exports = {
@@ -515,4 +779,9 @@ module.exports = {
     getConversation: getConversation,
     updateUserInfo: updateUserInfo,
     getUserInfo: getUserInfo,
+    getNetworkMessage: getNetworkMessage,
+    createEntity: createEntity,
+    createEntityCommunication: createEntityCommunication,
+    listEntity: listEntity,
+    listEntityCommunication: listEntityCommunication,
 };

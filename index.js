@@ -4,7 +4,9 @@ const jwt = require('jsonwebtoken');
 const multer = require('multer');
 const app = express();
 const router = express.Router();
+const entityNode = require('./entityConfig');
 const db = require("./db");
+global.entityNode = entityNode;
 global.io = require('socket.io').listen(7777);
 
 var storage =   multer.diskStorage({
@@ -103,6 +105,98 @@ app.post("/login", async (req, res) => {
       token: token,
       data: response.data
     });
+});
+
+app.post('/network/message', async (req,res) => {
+  if(req.body.type === 'text') {
+    let data = req.body;
+    let response = await db.createChat(data);
+    if (response.error) {
+      return res.json({ error: true, message: "error occurred while creating chat"});
+    }
+    global.io.emit('new_network_msg', {msg: response.data});
+    res.json({
+      error: false,
+      message: 'Success',
+      data: data
+    });
+  } else {
+    upload(req, res, async (err) => {
+      if(err) {
+        console.log(err);
+        return res.json({ error: true, message: "error occurred while sending message"});
+      }      
+      let data = req.body;      
+      data.filePath = req.file.path;
+      console.log(data);
+      let response = await db.createChat(data);
+      if (response.error) {
+        return res.json({ error: true, message: "error occurred while creating chat"});
+      }
+      data.ipfsPath = response.data.ipfsPath;
+      global.io.emit('new_network_msg', {msg: data});
+      res.json({
+        error: false,
+        message: 'Success',
+        data: data
+      });
+    }); 
+  }
+});
+
+/**
+ * Entity communication routes
+ */
+
+router.post('/entity', async(req,res) => {
+  let data = req.body;
+  let response = await db.createEntity(data);
+  if (response.error) {
+    return res.json({ error: true, message: "error occurred while creating entity" });
+  }
+  res.json({
+    error: false,
+    message: 'Success',
+    data: response.data
+  });
+});
+
+router.get('/entity', async(req,res) => {  
+  let response = await db.listEntity();
+  if (response.error) {
+    return res.json({ error: true, message: "error occurred while creating entity" });
+  }
+  res.json({
+    error: false,
+    message: 'Success',
+    data: response.data
+  });
+});
+
+router.post('/entity/communication', async(req,res) => {
+  let data = req.body;
+  let response = await db.createEntityCommunication(data);
+  if (response.error) {
+    return res.json({ error: true, message: "error occurred while creating entity" });
+  }
+  res.json({
+    error: false,
+    message: 'Success',
+    data: response.data
+  });
+});
+
+router.post('/entity/communication/list', async(req,res) => {
+  let data = req.body;
+  let response = await db.listEntityCommunication(data);
+  if (response.error) {
+    return res.json({ error: true, message: "error occurred while creating entity" });
+  }
+  res.json({
+    error: false,
+    message: 'Success',
+    data: response.data
+  });
 });
 
 router.post('/updateContacts', async (req,res) => {
@@ -253,6 +347,22 @@ router.get('/user/profile', async(req,res) => {
     data: response
   }); 
 });
+
+/**
+ * Network stuff
+ */
+
+router.get('/network/data',async (req,res) => {
+    let response = await db.getNetworkMessage();
+    if (response.error) {
+      return res.json({ error: true, message: "error occurred while getting network messages"});
+    }
+    res.json({
+      error: false,
+      message: 'Success',
+      data: response
+    });
+ });
 
 /**
  * Logout the user
