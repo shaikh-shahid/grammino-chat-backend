@@ -604,7 +604,7 @@ async function createEntityCommunication(requestData) {
 
 async function listEntityCommunication(data) {
     try {
-        let entityCommData = entityComm.query((doc) => doc.phone === data.phone);
+        let entityCommData = entityComm.query((doc) => doc.phone === data.phone && doc.entityId === data.entityId);
         return {
             "error": false,
             "data": entityCommData,
