@@ -132,7 +132,7 @@ app.post("/network/message", async (req, res) => {
     res.json({
       error: false,
       message: "Success",
-      data: response,
+      data: response.data,
     });
   } else {
     upload(req, res, async (err) => {
@@ -154,11 +154,11 @@ app.post("/network/message", async (req, res) => {
         });
       }
       data.ipfsPath = response.data.ipfsPath;
-      global.io.emit("new_network_msg", { msg: data });
+      global.io.emit("new_network_msg", { msg: response.data });
       res.json({
         error: false,
         message: "Success",
-        data: data,
+        data: response.data,
       });
     });
   }
@@ -321,7 +321,7 @@ router.post("/chat", async (req, res) => {
     res.json({
       error: false,
       message: "Success",
-      data: [],
+      data,
     });
   } else {
     upload(req, res, async (err) => {
@@ -343,6 +343,7 @@ router.post("/chat", async (req, res) => {
       }
       data.ipfsPath = response.data.ipfsPath;
       global.io.sockets.in(data.reciever).emit("new_msg", { msg: data });
+      console.log("Data", data);
       res.json({
         error: false,
         message: "Success",

@@ -1,16 +1,16 @@
 module.exports = [
   {
-    entityId: "368243c7-b632-4973-875b-c3d7bf6468c0",
+    entityId: "a7136389-6e19-4cc0-b7ca-d55c10355ef3",
     command: "take_photo",
     action: "click_picture",
-    type: "camera"
+    type: "camera",
   },
   {
-    entityId: "83807543-2d74-4e39-b198-67ed1f501a0c",
+    entityId: "60384f50-6ae2-4898-b9d5-2253e2b49fca",
     command: "take_photo",
     action: "click_picture",
-    type: "camera"
-  }
+    type: "camera",
+  },
 ];
 
-// module.exports = []
+// module.exports = [];
