@@ -128,6 +128,7 @@ app.post("/network/message", async (req, res) => {
         message: "error occurred while creating chat",
       });
     }
+    console.log("Will emit event now", response.data, global.io.emit);
     global.io.emit("new_network_msg", { msg: response.data });
     res.json({
       error: false,
@@ -295,6 +296,9 @@ router.post("/conversation", async (req, res) => {
       message: "error occurred while creating conversation",
     });
   }
+  console.log("Emitting new conversation", response.data);
+  global.io.emit("new_conversation", { conversation: response.data });
+
   res.json({
     error: false,
     message: "Success",
